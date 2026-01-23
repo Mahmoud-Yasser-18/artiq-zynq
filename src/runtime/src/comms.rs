@@ -43,7 +43,6 @@ pub enum Error {
     IoError,
     UnexpectedPattern,
     UnrecognizedPacket,
-    BufferExhausted,
     #[cfg(has_drtio)]
     SubkernelError(subkernel::Error),
     #[cfg(has_drtio)]
@@ -59,7 +58,6 @@ impl fmt::Display for Error {
             Error::IoError => write!(f, "io error"),
             Error::UnexpectedPattern => write!(f, "unexpected pattern"),
             Error::UnrecognizedPacket => write!(f, "unrecognized packet"),
-            Error::BufferExhausted => write!(f, "buffer exhausted"),
             #[cfg(has_drtio)]
             Error::SubkernelError(error) => write!(f, "subkernel error: {:?}", error),
             #[cfg(has_drtio)]
@@ -139,11 +137,8 @@ async fn read_request(stream: &TcpStream, allow_close: bool) -> Result<Option<Re
     ))
 }
 
-async fn read_bytes(stream: &TcpStream, max_length: usize) -> Result<Vec<u8>> {
+async fn read_bytes(stream: &TcpStream) -> Result<Vec<u8>> {
     let length = read_i32(&stream).await? as usize;
-    if length > max_length {
-        return Err(Error::BufferExhausted);
-    }
     let mut buffer = vec![0; length];
     read_chunk(&stream, &mut buffer).await?;
     Ok(buffer)
@@ -209,7 +204,7 @@ async fn handle_run_kernel(
                     let host_request = read_request(stream, false).await?.unwrap();
                     match host_request {
                         Request::RPCReply => {
-                            let tag = read_bytes(stream, 512).await?;
+                            let tag = read_bytes(stream).await?;
                             let slot = match fast_recv(&mut control.borrow_mut().rx).await {
                                 kernel::Message::RpcRecvRequest(slot) => slot,
                                 other => panic!("expected root value slot from core1, not {:?}", other),
@@ -689,7 +684,7 @@ async fn handle_connection(
                 stream.send_slice("ARZQ".as_bytes()).await?;
             }
             Request::LoadKernel => {
-                let buffer = read_bytes(stream, 1024 * 1024).await?;
+                let buffer = read_bytes(stream).await?;
                 load_kernel(&buffer, &control, Some(stream)).await?;
             }
             Request::RunKernel => {
@@ -708,7 +703,7 @@ async fn handle_connection(
                 {
                     let id = read_i32(stream).await? as u32;
                     let destination = read_i8(stream).await? as u8;
-                    let buffer = read_bytes(stream, 1024 * 1024).await?;
+                    let buffer = read_bytes(stream).await?;
                     subkernel::add_subkernel(id, destination, buffer).await;
                     match subkernel::upload(aux_mutex, routing_table, timer, id).await {
                         Ok(_) => write_header(stream, Reply::LoadCompleted).await?,

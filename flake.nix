@@ -397,4 +397,10 @@
     makeArtiqZynqPackage = board-package-set;
 
   };
+
+  nixConfig = {
+    extra-trusted-public-keys = "nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc=";
+    extra-substituters = "https://nixbld.m-labs.hk";
+    extra-sandbox-paths = "/opt";
+  };
 }

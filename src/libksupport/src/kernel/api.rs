@@ -320,6 +320,14 @@ pub fn resolve(required: &[u8]) -> Option<u32> {
             }
             api!(yn = yn)
         },
+        {
+            extern "C" fn sincos(x: f64, sin: &mut f64, cos: &mut f64) {
+                let (sin_, cos_) = libm::sincos(x);
+                *sin = sin_;
+                *cos = cos_;
+            }
+            api!(sincos = sincos)
+        },
         /*
          * syscall for unit tests
          * Used in `artiq.tests.coredevice.test_exceptions.ExceptionTest.test_raise_exceptions_kernel`

@@ -201,6 +201,7 @@ pub fn resolve(required: &[u8]) -> Option<u32> {
         api!(__aeabi_idivmod),
         api!(__aeabi_uidiv),
         api!(__aeabi_uldivmod),
+        api!(__aeabi_uidivmod),
 
         // 4.3.4 Memory copying, clearing, and setting
         api!(__aeabi_memcpy8),

@@ -14,8 +14,9 @@ from misoc.cores import virtual_leds
 
 from artiq.coredevice import jsondesc
 from artiq.gateware import rtio, eem_7series
+from artiq.gateware.cxp_grabber.core import CXPHostCore
 from artiq.gateware.rtio.xilinx_clocking import fix_serdes_timing_path
-from artiq.gateware.rtio.phy import ttl_simple
+from artiq.gateware.rtio.phy import ttl_simple, cxp_grabber
 from artiq.gateware.drtio.transceiver import gtx_7series, eem_serdes
 from artiq.gateware.drtio.siphaser import SiPhaser7Series
 from artiq.gateware.drtio.rx_synchronizer import XilinxRXSynchronizer
@@ -105,10 +106,105 @@ class GTPBootstrapClock(Module):
             raise ValueError("Bootstrap frequency must be 100 or 125MHz")
 
 
+def add_coaxpress_sfp(cls, sfp_slots, roi_engine_count, max_cxp_speed, refclk=None):
+    # Ported from ARTIQ 10 artiq-zynq kasli_soc.py (CoaXPress-SFP grabber support).
+    # `match` replaced with if/elif for Python-version safety.
+    if refclk is None:
+        refclk = Signal()
+        gt_refclk_pad = cls.platform.request("clk_gtp")
+        cls.platform.add_period_constraint(gt_refclk_pad.p, 8.0)
+        cls.specials += Instance("IBUFDS_GTE2",
+            i_CEB=0,
+            i_I=gt_refclk_pad.p,
+            i_IB=gt_refclk_pad.n,
+            o_O=refclk,
+            p_CLKCM_CFG="TRUE",
+            p_CLKRCV_TRST="TRUE",
+            p_CLKSWING_CFG=3
+        )
+
+    cls.config["HAS_CXP_LED"] = None
+
+    stream_fifo_size = 0x10000
+    # StreamPacketSizeMax is defined in bytes - Section 12.3.37 (CXP-001-2021)
+    cls.config["MAX_CXP_STREAM_PAK_SIZE"] = stream_fifo_size // 8
+    cls.submodules.cxp_grabber = cxp_grabber.CXPGrabber(
+        refclk=refclk,
+        gt_pads=[cls.platform.request("sfp", i) for i in sfp_slots],
+        sys_clk_freq=cls.clk_freq,
+        roi_engine_count=roi_engine_count,
+        stream_fifo_size=stream_fifo_size
+    )
+    cls.csr_devices.append("cxp_grabber")
+
+    cls.cxp_csr_group = []
+    cls.cxp_mem_group = []
+    for i, trx_phy in enumerate(cls.cxp_grabber.phy.phys):
+        core_name = "cxp" + str(i)
+        mem_name = "cxp" + str(i) + "_mem"
+        core = CXPHostCore(trx_phy, trx_phy, cls.clk_freq)
+        setattr(cls.submodules, core_name, core)
+
+        cls.comb += core.rx.source.connect(cls.cxp_grabber.stream_decoder.sinks[i]),
+
+        # Only master channel need to connect trigger
+        if i == 0:
+            cls.sync.rio += [
+                core.tx.trig_extra_linktrig.eq(cls.cxp_grabber.trig_extra_linktrig_en),
+                core.tx.trig_linktrig_mode.eq(cls.cxp_grabber.trig_linktrig_mode),
+                core.tx.trig_stb.eq(cls.cxp_grabber.trig_stb),
+            ]
+
+        cls.csr_devices.append(core_name)
+        cls.cxp_csr_group.append(core_name)
+        cls.cxp_mem_group.append(mem_name)
+
+        mem_size = core.get_mem_size()
+        # upper half is tx while lower half is rx
+        memory_address = cls.axi2csr.register_port(core.get_tx_port(), mem_size)
+        cls.axi2csr.register_port(core.get_rx_port(), mem_size)
+        cls.add_memory_region(
+            mem_name, cls.mem_map["csr"] + memory_address, mem_size * 2
+        )
+
+    cls.add_csr_group("cxp", cls.cxp_csr_group)
+    cls.add_memory_group("cxp_mem", cls.cxp_mem_group)
+
+    print(
+        "CoaXPress-SFP (SFP{}) at RTIO channel 0x{:06x}".format(
+            str(sfp_slots)[1:-1], len(cls.rtio_channels)
+        )
+    )
+    cls.rtio_channels += [
+        rtio.Channel(cls.cxp_grabber.trigger),
+        rtio.Channel(cls.cxp_grabber.config),
+        rtio.Channel(cls.cxp_grabber.gate_data),
+    ]
+
+    cls.config["MAX_CXP_SPEED"] = max_cxp_speed
+    if max_cxp_speed == "CXP-6":
+        # max freq of cxp_gt_rx = linerate/internal_datawidth = 6.25Gbps/40 = 156.25 MHz
+        rx_period = 6.4
+    elif max_cxp_speed == "CXP-10":
+        # max freq of cxp_gt_rx = 10Gbps/40 = 250 MHz
+        rx_period = 4
+    elif max_cxp_speed == "CXP-12":
+        # max freq of cxp_gt_rx = 12.5Gbps/40 = 312.5 MHz
+        rx_period = 3.2
+    else:
+        raise ValueError("Invalid CXP speed")
+
+    rx = cls.cxp_grabber.phy.phys[0]
+    cls.platform.add_period_constraint(rx.gtx.cd_cxp_gt_rx.clk, rx_period)
+    # constraint the clk path
+    cls.platform.add_false_path_constraints(cls.sys_crg.cd_sys.clk, rx.gtx.cd_cxp_gt_rx.clk)
+
+
 class GenericStandalone(SoCCore):
     def __init__(self, description, acpki=False):
         self.acpki = acpki
         clk_freq = description["rtio_frequency"]
+        self.clk_freq = clk_freq  # needed by add_coaxpress_sfp (CXP grabber)
         with_wrpll = description["enable_wrpll"]
 
         platform = kasli_soc.Platform()
@@ -163,10 +259,19 @@ class GenericStandalone(SoCCore):
 
 
         self.rtio_channels = []
-        has_grabber = any(peripheral["type"] == "grabber" for peripheral in description["peripherals"])
-        if has_grabber:
-            self.grabber_csr_group = []
-        eem_7series.add_peripherals(self, description["peripherals"], iostandard=eem_iostandard)
+        has_grabber = False
+        eem_peripherals = []
+        for peripheral in description["peripherals"]:
+            if peripheral["type"] == "coaxpress_sfp":
+                add_coaxpress_sfp(self, list(range(peripheral["channels"])),
+                                  peripheral["roi_engine_count"], peripheral["max_cxp_speed"])
+            elif peripheral["type"] == "grabber":
+                has_grabber = True
+                self.grabber_csr_group = []
+                eem_peripherals.append(peripheral)
+            else:
+                eem_peripherals.append(peripheral)
+        eem_7series.add_peripherals(self, eem_peripherals, iostandard=eem_iostandard)
         for i in (0, 1):
             print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
             user_led = self.platform.request("user_led", i)

@@ -18,6 +18,8 @@ use libboard_artiq::drtio_eem;
 #[cfg(feature = "target_kasli_soc")]
 use libboard_artiq::io_expander;
 use libboard_artiq::{identifier_read, logger, pl};
+#[cfg(has_cxp_grabber)]
+use libboard_artiq::{cxp_grabber, cxp_phys};
 use libboard_zynq::{gic, mpcore, timer::GlobalTimer};
 use libconfig::Config;
 use libcortex_a9::l2c::enable_l2_cache;
@@ -153,6 +155,20 @@ pub fn main_core0() {
 
     #[cfg(has_grabber)]
     task::spawn(grabber::grabber_thread(timer));
+
+    // CoaXPress grabber: set up the PHY and spawn the camera control/discovery thread.
+    // Ported from ARTIQ 10 runtime. The camera talks over the CXP link; the i2c bus is
+    // used for SFP/LED control. We grab a &mut to the shared I2C_BUS the same (unsafe)
+    // way the target_kasli_soc block above does. NOTE(port): this shares I2C_BUS with the
+    // io_expander service task under the cooperative async executor; verify at bring-up
+    // that access is correctly serialized (candidate follow-up: route both through a
+    // single owner, mirroring v10 libboard_artiq::i2c::get_bus()).
+    #[cfg(has_cxp_grabber)]
+    {
+        cxp_phys::setup();
+        let cxp_i2c = unsafe { (ksupport::kernel::i2c::I2C_BUS).as_mut().unwrap() };
+        task::spawn(cxp_grabber::thread(cxp_i2c));
+    }
 
     task::spawn(ksupport::report_async_rtio_errors());
 

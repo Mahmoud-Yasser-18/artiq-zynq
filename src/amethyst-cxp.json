@@ -1,0 +1,71 @@
+{
+    "_description": "ARTIQ 8 backport: Test System + CoaXPress-SFP (Hamamatsu C15550-22UP), 4-channel Quad CXP-6",
+    "target": "kasli_soc",
+    "variant": "amethyst_cxp",
+    "hw_rev": "v1.2",
+    "min_artiq_version": "8",
+    "base": "standalone",
+    "drtio_role": "standalone",
+    "enable_wrpll": false,
+    "rtio_frequency": 125e6,
+    "sed_lanes": 8,
+    "core_addr": "192.168.1.73",
+    "peripherals": [
+        {
+            "type": "coaxpress_sfp",
+            "channels": 4,
+            "roi_engine_count": 16,
+            "max_cxp_speed": "CXP-6"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_BNC",
+            "ports": [0],
+            "bank_direction_low": "input",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_BNC",
+            "ports": [1],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [2],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [3],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "urukul",
+            "ports": [4, 5],
+            "clk_sel": 2,
+            "dds": "ad9912"
+        },
+        {
+            "type": "urukul",
+            "ports": [6, 7],
+            "clk_sel": 2,
+            "dds": "ad9912"
+        },
+        {
+            "type": "sampler",
+            "board": "Sampler",
+            "hw_rev": "v2.2",
+            "ports": [8, 9]
+        },
+        {
+            "type": "zotino",
+            "ports": [11]
+        }
+    ]
+}

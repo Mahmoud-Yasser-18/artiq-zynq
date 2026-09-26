@@ -7,6 +7,8 @@ use log::{info, warn};
 
 #[cfg(has_drtio)]
 use super::subkernel;
+#[cfg(has_cxp_grabber)]
+use super::cxp;
 use super::{cache,
             core1::rtio_get_destination_status,
             dma, i2c,
@@ -116,6 +118,18 @@ pub fn resolve(required: &[u8]) -> Option<u32> {
         api!(i2c_write = i2c::write),
         api!(i2c_read = i2c::read),
         api!(i2c_switch_select = i2c::switch_select),
+
+        // cxp grabber
+        #[cfg(has_cxp_grabber)]
+        api!(cxp_download_xml_file = cxp::download_xml_file),
+        #[cfg(has_cxp_grabber)]
+        api!(cxp_read32 = cxp::read32),
+        #[cfg(has_cxp_grabber)]
+        api!(cxp_write32 = cxp::write32),
+        #[cfg(has_cxp_grabber)]
+        api!(cxp_start_roi_viewer = cxp::start_roi_viewer),
+        #[cfg(has_cxp_grabber)]
+        api!(cxp_download_roi_viewer_frame = cxp::download_roi_viewer_frame),
 
         // subkernel
         #[cfg(has_drtio)]

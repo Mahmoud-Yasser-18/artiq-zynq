@@ -476,7 +476,7 @@ extern "C" fn stop_fn(
 }
 
 // Must be kept in sync with preallocate_runtime_exception_names() in `artiq.compiler.embedding`
-static EXCEPTION_ID_LOOKUP: [(&str, u32); 12] = [
+static EXCEPTION_ID_LOOKUP: [(&str, u32); 13] = [
     ("RuntimeError", 0),
     ("RTIOUnderflow", 1),
     ("RTIOOverflow", 2),
@@ -489,6 +489,9 @@ static EXCEPTION_ID_LOOKUP: [(&str, u32); 12] = [
     ("IndexError", 9),
     ("UnwrapNoneError", 10),
     ("SubkernelError", 11),
+    // CoaXPress grabber (ARTIQ 8 backport). Must stay in sync with
+    // preallocate_runtime_exception_names() in artiq.compiler.embedding.
+    ("CXPError", 12),
 ];
 
 pub fn get_exception_id(name: &str) -> u32 {

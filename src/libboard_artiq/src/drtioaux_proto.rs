@@ -2,6 +2,11 @@ use core_io::{Error as IoError, Read, Write};
 use io::proto::{ProtoRead, ProtoWrite};
 
 pub const MAX_PACKET: usize = 1024;
+// CoaXPress payload sizing (ported from ARTIQ 10). Used by kernel/cxp.rs even on a
+// standalone (non-DRTIO) system for the XML-download read buffer.
+pub const CXP_PAYLOAD_MAX_SIZE: usize = /*max size*/
+    MAX_PACKET - /*packet ID*/1 - /*length*/2 - /*CRC*/4 - /*padding to keep CXP register access 4 bytes align*/1;
+pub const CXP_PAYLOAD_MAX_SIZE_U64: usize = CXP_PAYLOAD_MAX_SIZE / 8;
 
 // maximum size of arbitrary payloads
 // used by satellite -> master analyzer, subkernel exceptions

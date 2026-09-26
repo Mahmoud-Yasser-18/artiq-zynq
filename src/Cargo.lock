@@ -268,6 +268,7 @@ name = "libboard_artiq"
 version = "0.0.0"
 dependencies = [
  "build_zynq",
+ "byteorder",
  "core_io",
  "crc",
  "embedded-hal",

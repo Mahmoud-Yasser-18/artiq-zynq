@@ -23,8 +23,9 @@ core_io = { version = "0.1", features = ["collections"] }
 embedded-hal = "0.2"
 nb = "1.0"
 void = { version = "1", default-features = false }
+byteorder = { version = "1.3", default-features = false }
 
-io = { path = "../libio", features = ["byteorder"] }
+io = { path = "../libio", features = ["alloc", "byteorder"] }
 libboard_zynq = { path = "@@ZYNQ_RS@@/libboard_zynq" }
 libsupport_zynq = { path = "@@ZYNQ_RS@@/libsupport_zynq", default-features = false, features = ["alloc_core"] }
 libregister = { path = "@@ZYNQ_RS@@/libregister" }

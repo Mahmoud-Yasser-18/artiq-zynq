@@ -3,6 +3,7 @@
 #![feature(naked_functions)]
 #![feature(asm)]
 
+extern crate alloc;
 extern crate core_io;
 extern crate crc;
 extern crate embedded_hal;
@@ -25,7 +26,7 @@ pub mod fiq;
 #[cfg(feature = "target_kasli_soc")]
 pub mod io_expander;
 pub mod logger;
-#[cfg(has_drtio)]
+#[cfg(any(has_drtio, has_cxp_grabber))]
 #[rustfmt::skip]
 #[path = "../../../build/mem.rs"]
 pub mod mem;
@@ -36,6 +37,20 @@ pub mod pl;
 pub mod drtio_eem;
 #[cfg(has_grabber)]
 pub mod grabber;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_camera_setup;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_compat;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_ctrl;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_grabber;
+#[cfg(all(has_cxp_grabber, has_cxp_led))]
+pub mod cxp_led;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_packet;
+#[cfg(has_cxp_grabber)]
+pub mod cxp_phys;
 #[cfg(has_si5324)]
 pub mod si5324;
 #[cfg(has_si549)]
